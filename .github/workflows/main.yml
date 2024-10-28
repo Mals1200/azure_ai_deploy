@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main  # Ensure you are on the main branch when you push changes
+      - main
 
 env:
-  AZURE_WEBAPP_NAME: cxqa-webapp  # The name of your Azure Web App
-  AZURE_WEBAPP_PACKAGE_PATH: "./publish"  # Path for deployment package
+  AZURE_WEBAPP_NAME: cxqa-webapp  # Your Azure Web App name
+  AZURE_WEBAPP_PACKAGE_PATH: "./publish"  # Path to package the deployment
 
 jobs:
   deploy:
@@ -32,14 +32,16 @@ jobs:
         run: mkdir -p ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
       - name: Copy files to package directory
-        run: cp -r * ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+        run: |
+          cp Code.py ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/  # Copy Code.py
+          cp requirements.txt ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/  # Copy requirements.txt
 
       - name: Package for deployment
-        run: zip -r ${AZURE_WEBAPP_PACKAGE_PATH}.zip ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/*
+        run: zip -r ${AZURE_WEBAPP_PACKAGE_PATH}.zip ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/*  # Correctly zip the package
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}  # Ensure this is set correctly
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}  # Ensure this secret is set
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}.zip"
