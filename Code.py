@@ -1,56 +1,68 @@
-from flask import Flask, request, jsonify
+import http.server
+import socketserver
 import urllib.request
 import json
 import os
 import ssl
+from urllib.parse import parse_qs
 
-app = Flask(__name__)
+PORT = 8000
 
-# Allow self-signed HTTPS certificates
-def allowSelfSignedHttps(allowed):
-    if allowed and not os.environ.get('PYTHONHTTPSVERIFY', '') and getattr(ssl, '_create_unverified_context', None):
-        ssl._create_default_https_context = ssl._create_unverified_context
+class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def do_POST(self):
+        # Endpoint logic for processing the request
+        if self.path == '/ask':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)  # Get the data sent in the request
 
-allowSelfSignedHttps(True)
+            # Process the incoming JSON data
+            data = json.loads(post_data.decode('utf-8'))
+            user_input = data.get('question')
+            
+            if not user_input:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b'{"error": "Question not provided"}')
+                return
+            
+            # Prepare to call the Azure ML endpoint
+            body = str.encode(json.dumps({"input": user_input}))
+            url = 'https://cxqa-genai-project-fawqm.eastus.inference.ml.azure.com/score'
+            api_key = os.getenv('API_KEY')  # Set API key in Azure App Settings
 
-@app.route('/score', methods=['POST'])  # Define the route for scoring
-def score():
-    try:
-        # Get JSON data from the request body
-        data = request.json
-        
-        # Prepare the request body for your Azure ML endpoint
-        body = str.encode(json.dumps(data))
-        
-        # Replace this with your Azure ML endpoint URL
-        url = 'https://cxqa-genai-project-fawqm.eastus.inference.ml.azure.com/score'
-        
-        # Fetch the API key from environment variables for security
-        api_key = os.getenv('API_KEY')  # Set this in Azure App Settings for security
-        
-        if not api_key:
-            return jsonify({'error': 'API key not provided'}), 403
+            if not api_key:
+                self.send_response(403)
+                self.end_headers()
+                self.wfile.write(b'{"error": "API key not provided"}')
+                return
+            
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {api_key}'
+            }
 
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + api_key
-        }
+            req = urllib.request.Request(url, body, headers)
 
-        # Create a request to the Azure ML service
-        req = urllib.request.Request(url, body, headers)
-        
-        # Call the Azure ML scoring endpoint
-        response = urllib.request.urlopen(req)
-        result = response.read()
-        
-        # Return the result as JSON
-        return jsonify(json.loads(result))
+            try:
+                response = urllib.request.urlopen(req)
+                result = response.read()
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(result)
+            except urllib.error.HTTPError as error:
+                self.send_response(error.code)
+                self.end_headers()
+                self.wfile.write(f'{{"error": {error.code}, "message": "{error.reason}"}}'.encode())
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(f'{{"error": "{str(e)}"}}'.encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b'{"error": "Not Found"}')
 
-    except urllib.error.HTTPError as error:
-        return jsonify({'error': str(error.code), 'message': str(error.info())}), error.code
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    # Run the Flask app on the specified port
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))  # Azure listens on port 8000
+# Start the server
+with socketserver.TCPServer(("", PORT), MyRequestHandler) as httpd:
+    print(f"Serving on port {PORT}")
+    httpd.serve_forever()
