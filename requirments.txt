@@ -1,3 +1,8 @@
 pandas
 azure-storage-blob
+io
+warnings
+json
 promptflow
+contextlib
+datetime
