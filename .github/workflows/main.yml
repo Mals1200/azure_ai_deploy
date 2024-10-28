@@ -45,10 +45,11 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          auth-type: 'service-principal'  # Specify the auth type
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}  # Ensure this is set correctly
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}  # Ensure this secret is set correctly
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}.zip"
