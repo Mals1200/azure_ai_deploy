@@ -8,7 +8,7 @@ on:
 
 env:
   AZURE_WEBAPP_NAME: cxqa-webapp  # Your Azure Web App name
-  AZURE_WEBAPP_PACKAGE_PATH: "./publish"  # Path to package the deployment
+  AZURE_WEBAPP_PACKAGE_PATH: "./publish"  # Path for deployment package
 
 jobs:
   deploy:
@@ -33,15 +33,22 @@ jobs:
 
       - name: Copy files to package directory
         run: |
-          cp Code.py ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/  # Copy Code.py
-          cp requirements.txt ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/  # Copy requirements.txt
+          cp Code.py ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/
+          cp requirements.txt ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/
 
       - name: Package for deployment
-        run: zip -r ${AZURE_WEBAPP_PACKAGE_PATH}.zip ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/*  # Correctly zip the package
+        run: zip -r ${AZURE_WEBAPP_PACKAGE_PATH}.zip ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/*
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}  # Ensure this secret is set
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}  # Ensure this is set correctly
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}.zip"
