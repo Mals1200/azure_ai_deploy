@@ -7,8 +7,8 @@ on:
       - main
 
 env:
-  AZURE_WEBAPP_NAME: cxqa-webapp2  # Change this to your Azure Web App name
-  AZURE_WEBAPP_PACKAGE_PATH: "./your-package-path"  # Change this to your package path
+  AZURE_WEBAPP_NAME: cxqa-webapp2  # Your Azure Web App name
+  AZURE_WEBAPP_PACKAGE_PATH: "./publish"  # The directory where your application files are located
 
 jobs:
   publish:
@@ -27,8 +27,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt  # Ensure you have this file in your repository
 
-      - name: Package
-        run: zip -r ${AZURE_WEBAPP_PACKAGE_PATH}.zip .  # Packages your app into a zip file
+      - name: Create package directory
+        run: |
+          mkdir -p ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}  # Create the publish directory
+
+      - name: Copy files to package directory
+        run: |
+          cp -r * ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}  # Copy your application files to the package directory
+
+      - name: Package for deployment
+        run: zip -r ${AZURE_WEBAPP_PACKAGE_PATH}.zip ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/*  # Zip the package directory for Azure deployment
 
       - name: Deployment
         uses: azure/webapps-deploy@v2
