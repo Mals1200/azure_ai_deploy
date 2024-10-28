@@ -1,68 +1,45 @@
-import http.server
-import socketserver
-import urllib.request
-import json
-import os
-import ssl
-from urllib.parse import parse_qs
+name: Deploy to Azure Web App
 
-PORT = 8000
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main  # Ensure you are on the main branch when you push changes
 
-class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
-    def do_POST(self):
-        # Endpoint logic for processing the request
-        if self.path == '/ask':
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)  # Get the data sent in the request
+env:
+  AZURE_WEBAPP_NAME: cxqa-webapp  # The name of your Azure Web App
+  AZURE_WEBAPP_PACKAGE_PATH: "./publish"  # Path for deployment package
 
-            # Process the incoming JSON data
-            data = json.loads(post_data.decode('utf-8'))
-            user_input = data.get('question')
-            
-            if not user_input:
-                self.send_response(400)
-                self.end_headers()
-                self.wfile.write(b'{"error": "Question not provided"}')
-                return
-            
-            # Prepare to call the Azure ML endpoint
-            body = str.encode(json.dumps({"input": user_input}))
-            url = 'https://cxqa-genai-project-fawqm.eastus.inference.ml.azure.com/score'
-            api_key = os.getenv('API_KEY')  # Set API key in Azure App Settings
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-            if not api_key:
-                self.send_response(403)
-                self.end_headers()
-                self.wfile.write(b'{"error": "API key not provided"}')
-                return
-            
-            headers = {
-                'Content-Type': 'application/json',
-                'Authorization': f'Bearer {api_key}'
-            }
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-            req = urllib.request.Request(url, body, headers)
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
 
-            try:
-                response = urllib.request.urlopen(req)
-                result = response.read()
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(result)
-            except urllib.error.HTTPError as error:
-                self.send_response(error.code)
-                self.end_headers()
-                self.wfile.write(f'{{"error": {error.code}, "message": "{error.reason}"}}'.encode())
-            except Exception as e:
-                self.send_response(500)
-                self.end_headers()
-                self.wfile.write(f'{{"error": "{str(e)}"}}'.encode())
-        else:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b'{"error": "Not Found"}')
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-# Start the server
-with socketserver.TCPServer(("", PORT), MyRequestHandler) as httpd:
-    print(f"Serving on port {PORT}")
-    httpd.serve_forever()
+      - name: Create package directory
+        run: mkdir -p ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+      - name: Copy files to package directory
+        run: cp -r * ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+      - name: Package for deployment
+        run: zip -r ${AZURE_WEBAPP_PACKAGE_PATH}.zip ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/*
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}  # Ensure this is set correctly
+          package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}.zip"
