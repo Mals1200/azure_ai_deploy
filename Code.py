@@ -1,36 +1,35 @@
+from flask import Flask, request, jsonify
 import urllib.request
 import json
 import os
 import ssl
 
+app = Flask(__name__)
+
 def allowSelfSignedHttps(allowed):
-    # bypass the server certificate verification on client side
     if allowed and not os.environ.get('PYTHONHTTPSVERIFY', '') and getattr(ssl, '_create_unverified_context', None):
         ssl._create_default_https_context = ssl._create_unverified_context
 
-allowSelfSignedHttps(True) # this line is needed if you use self-signed certificate in your scoring service.
+allowSelfSignedHttps(True)
 
-# Request data goes here
-# The example below assumes JSON formatting which may be updated
-# depending on the format your endpoint expects.
-data = {"input":""}
+@app.route('/score', methods=['POST'])
+def score():
+    data = request.json  # Get JSON data from the HTTP request body
+    
+    # Prepare the request for your Azure ML endpoint
+    body = str.encode(json.dumps(data))
+    url = 'https://cxqa-genai-project-fawqm.eastus.inference.ml.azure.com/score'
+    api_key = 'YOUR_API_KEY_HERE'  # Secure your key using Azure App Settings
 
-body = str.encode(json.dumps(data))
+    headers = {'Content-Type': 'application/json', 'Authorization': ('Bearer ' + api_key)}
+    req = urllib.request.Request(url, body, headers)
 
-url = 'https://cxqa-genai-project-fawqm.eastus.inference.ml.azure.com/score'
-api_key = 'H8Tb0bn6NvwJU9BEgwu44zOmEL4eadgQ'  # Make sure to use environment variables for security
-if not api_key:
-    raise Exception("A key should be provided to invoke the endpoint")
+    try:
+        response = urllib.request.urlopen(req)
+        result = response.read()
+        return jsonify(result)  # Return the result as JSON
+    except urllib.error.HTTPError as error:
+        return jsonify({'error': str(error.code), 'message': str(error.info())}), error.code
 
-headers = {'Content-Type':'application/json', 'Authorization':('Bearer '+ api_key)}
-
-req = urllib.request.Request(url, body, headers)
-
-try:
-    response = urllib.request.urlopen(req)
-    result = response.read()
-    print(result)
-except urllib.error.HTTPError as error:
-    print("The request failed with status code: " + str(error.code))
-    print(error.info())
-    print(error.read().decode("utf8", 'ignore'))
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8000)))  # Make sure to listen on port 8000
