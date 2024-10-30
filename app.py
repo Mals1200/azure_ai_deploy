@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, request, jsonify
 import urllib.request
 import json
 import os
@@ -12,27 +12,25 @@ def allowSelfSignedHttps(allowed):
 
 allowSelfSignedHttps(True)
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    if request.method == 'POST':
-        user_input = request.form['textbox']
-        data = {"input": user_input}  # Structure your input based on your service's requirements.
-
-        body = str.encode(json.dumps(data))
-        url = 'https://cxqa-genai-project-igysf.eastus.inference.ml.azure.com/score'
-        api_key = 'YOUR_API_KEY'  # Replace with your API key
-
-        headers = {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + api_key}
-        req = urllib.request.Request(url, body, headers)
-
-        try:
-            response = urllib.request.urlopen(req)
-            result = response.read()
-            return render_template('index.html', result=result.decode('utf-8'))  # Decode result for display
-        except urllib.error.HTTPError as error:
-            return f"Error: {str(error.code)} - {error.read().decode('utf-8', 'ignore')}"
+@app.route('/predict', methods=['POST'])
+def predict():
+    input_data = request.json['input']
+    data = {'input': input_data}
+    body = str.encode(json.dumps(data))
     
-    return render_template('index.html', result=None)
+    url = 'https://cxqa-genai-project-igysf.eastus.inference.ml.azure.com/score'
+    api_key = os.getenv('AZURE_API_KEY')  # Get API key from environment variables
+
+    headers = {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + api_key}
+
+    req = urllib.request.Request(url, body, headers)
+
+    try:
+        response = urllib.request.urlopen(req)
+        result = response.read()
+        return jsonify(result.decode('utf-8')), 200
+    except urllib.error.HTTPError as error:
+        return jsonify(error=str(error.code), info=error.read().decode("utf8", 'ignore')), error.code
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))  # PORT environment variable used by Azure
